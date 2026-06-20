@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カード明細マネージャー</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f5f5f7;--card:#fff;--text:#1d1d1f;--sub:#86868b;--accent:#0071e3;
+  --accent-light:#e8f2ff;--border:#d2d2d7;--danger:#ff3b30;--success:#34c759;
+  --hover:#f0f0f5;--shadow:0 1px 3px rgba(0,0,0,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+.container{max-width:1100px;margin:0 auto;padding:16px}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 0;position:sticky;top:0;z-index:100}
+header .container{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:18px;font-weight:600;white-space:nowrap}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-size:13px;cursor:pointer;font-weight:500;transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:#005bb5}
+.btn-danger{color:var(--danger);border-color:var(--danger)}
+.btn-sm{padding:4px 10px;font-size:12px}
+
+.tabs{display:flex;gap:0;background:var(--card);border-radius:10px;padding:3px;border:1px solid var(--border);margin:16px 0}
+.tab{flex:1;padding:8px 12px;text-align:center;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;color:var(--sub)}
+.tab.active{background:var(--accent);color:#fff}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border-radius:10px;padding:14px 16px;border:1px solid var(--border)}
+.stat-label{font-size:11px;color:var(--sub);margin-bottom:2px}
+.stat-value{font-size:20px;font-weight:600}
+.stat-value.negative{color:var(--danger)}
+
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.filters select,.filters input{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);min-width:0}
+.filters input[type="text"]{flex:1;min-width:150px}
+.filters input[type="month"]{width:140px}
+
+.table-wrap{background:var(--card);border-radius:10px;border:1px solid var(--border);overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:700px}
+thead{position:sticky;top:0;z-index:2}
+th{background:#f8f8fa;padding:10px 12px;text-align:left;font-weight:600;font-size:12px;color:var(--sub);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{background:#eee}
+th .sort-icon{margin-left:4px;font-size:10px}
+td{padding:9px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap}
+tr:hover td{background:var(--hover)}
+.amount{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.amount.neg{color:var(--danger)}
+.cat-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;background:var(--accent-light);color:var(--accent)}
+.summary-row td{font-weight:600;background:#fafafa;border-top:2px solid var(--border)}
+
+.upload-area{border:2px dashed var(--border);border-radius:12px;padding:40px 20px;text-align:center;margin:16px 0;cursor:pointer;transition:all .2s;background:var(--card)}
+.upload-area:hover,.upload-area.drag{border-color:var(--accent);background:var(--accent-light)}
+.upload-area input{display:none}
+.upload-icon{font-size:32px;margin-bottom:8px}
+.upload-text{font-size:14px;color:var(--sub)}
+
+.pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin:12px 0;font-size:13px}
+.page-info{color:var(--sub)}
+
+.group-header td{background:#f0f4ff!important;font-weight:600;color:var(--accent);cursor:pointer}
+.empty{text-align:center;padding:60px 20px;color:var(--sub)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+
+.toast{position:fixed;bottom:20px;right:20px;background:#333;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border-radius:14px;padding:24px;width:90%;max-width:500px;max-height:80vh;overflow-y:auto}
+.modal h2{font-size:16px;margin-bottom:16px}
+.modal-close{float:right;background:none;border:none;font-size:20px;cursor:pointer;color:var(--sub)}
+
+@media(max-width:600px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .filters{flex-direction:column}
+  .filters select,.filters input{width:100%}
+  h1{font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>💳 カード明細マネージャー</h1>
+    <div class="header-actions">
+      <span id="dataCount" style="font-size:12px;color:var(--sub)"></span>
+      <label class="btn btn-primary" for="csvInput">CSVアップロード</label>
+      <input type="file" id="csvInput" accept=".csv" multiple style="display:none">
+      <button class="btn" onclick="exportCSV()">CSV出力</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmClear()">全削除</button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div id="uploadSection">
+    <label class="upload-area" for="csvInput2" id="dropZone">
+      <input type="file" id="csvInput2" accept=".csv" multiple>
+      <div class="upload-icon">📂</div>
+      <div>クレジットカード明細CSVをここにドラッグ or クリック</div>
+      <div class="upload-text">Shift-JIS / UTF-8 対応・複数ファイル可</div>
+    </label>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="list" onclick="switchTab('list')">明細一覧</div>
+    <div class="tab" data-tab="category" onclick="switchTab('category')">カテゴリ集計</div>
+    <div class="tab" data-tab="store" onclick="switchTab('store')">店舗集計</div>
+    <div class="tab" data-tab="monthly" onclick="switchTab('monthly')">月別推移</div>
+  </div>
+
+  <div id="statsBar" class="stats"></div>
+
+  <div id="listView">
+    <div class="filters">
+      <input type="month" id="filterFrom" title="開始月">
+      <span style="color:var(--sub)">〜</span>
+      <input type="month" id="filterTo" title="終了月">
+      <select id="filterUser"><option value="">全利用者</option></select>
+      <select id="filterCat"><option value="">全カテゴリ</option></select>
+      <input type="text" id="filterSearch" placeholder="店舗名で検索...">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="listHeader"></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <div id="categoryView" style="display:none">
+    <div class="filters">
+      <input type="month" id="catFilterFrom">
+      <span style="color:var(--sub)">〜</span>
+      <input type="month" id="catFilterTo">
+      <select id="catFilterUser"><option value="">全利用者</option></select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>カテゴリ</th><th>件数</th><th style="text-align:right">合計金額</th><th style="text-align:right">平均</th><th style="text-align:right">割合</th></tr></thead>
+        <tbody id="catBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="storeView" style="display:none">
+    <div class="filters">
+      <input type="month" id="storeFilterFrom">
+      <span style="color:var(--sub)">〜</span>
+      <input type="month" id="storeFilterTo">
+      <select id="storeFilterUser"><option value="">全利用者</option></select>
+      <select id="storeFilterCat"><option value="">全カテゴリ</option></select>
+      <input type="text" id="storeSearch" placeholder="店舗名で検索...">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>店舗名</th><th>カテゴリ</th><th>件数</th><th style="text-align:right">合計金額</th><th style="text-align:right">平均</th></tr></thead>
+        <tbody id="storeBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="monthlyView" style="display:none">
+    <div class="filters">
+      <select id="monthlyFilterUser"><option value="">全利用者</option></select>
+      <select id="monthlyFilterCat"><option value="">全カテゴリ</option></select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>年月</th><th>件数</th><th style="text-align:right">合計金額</th><th style="text-align:right">平均</th></tr></thead>
+        <tbody id="monthlyBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">&times;</button>
+    <h2>カテゴリ編集</h2>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:12px" id="editStoreName"></p>
+    <select id="editCatSelect" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:12px"></select>
+    <input type="text" id="editCatCustom" placeholder="新しいカテゴリ名..." style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:16px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveCategory()">この店舗すべてに適用</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'kakeibo_data';
+const CATS_KEY = 'kakeibo_custom_cats';
+const PAGE_SIZE = 100;
+
+const CAT_RULES = [
+  ["スーパー・食料品",["オオゼキ","サミット","まいばすけっと","ライフバランス","イオンビッグ"]],
+  ["コンビニ",["セブンイレブン","ローソン","ファミリーマート"]],
+  ["ドラッグストア",["ココカラファイン","クリエイトエス","たから薬局","ドラッグ","ツルハ"]],
+  ["外食・飲食",["サイゼリヤ","バーガーキング","マクドナルド","ガスト","鶏バル","SHUNSE","フットニック","スターバックス","カルディコーヒー","ジーリー","ナヒライ","鳥貴族","まぐろ","ダイニング","ぞうすい","コメダ","バルコンティ","ルミネスト","焼肉","居酒屋","経堂コルティ","砂場","杉玉","ＶＡＮＳＡＮ","地どり","ます家","ビッグエコー","酒蔵","丸亀","吉野家","松屋","すき家","CoCo","ほねつぎ","カラオケ"]],
+  ["通信費",["ＤＴＩ・ＴＯＮＥ","インターネットイニシアティブ","楽天モバイル通信料","ソニーネットワーク","ＴＵＴＯ・ＰＨＯＮＥ"]],
+  ["交通費",["モバイルＰＡＳＭＯ","タイムズカー","ＥＴＣ","LUUP","ＪＲ東日本","ＪＲ西日本","小田急電鉄","ＪＡＬ","九州旅客鉄道"]],
+  ["保険",["ＳＯＭＰＯひまわり","ジェイアイ火災保険"]],
+  ["医療",["ふじないかくりにっく","百瀬歯科","はやしだ","林田整形","眼科","はやし矯正","多摩病院","くじら堂鍼灸","とよしま内視鏡","クリニック","歯科","整骨"]],
+  ["教育・学校",["首都圏模試","学研","プリントコーポ","ベッシー学童","ことぶき塾","学校法人","八雲学園","Ａｃａｄｅｍｉｃｏ"]],
+  ["日用品・雑貨",["アマゾン","Amazon","ユニクロ","SP WEGO","SP CREATOR","チャレンジウェブ","セリア","ヤマトヤ","フランフラン","モンテリア","フリマ","メルカリ","写真スタジオ","PLEADY","カニパラダイス","ニトリ","渋谷ロフト","ラクテンファッション","漫画全巻","楽天ビック","きくや美粧堂","SP RASIK","アルペン楽天","GOOGLE*GOOGLE STORE","スウォッチ","出西窯","業務スーパー","Ｅｄｙチャージ","ＡｍａｚｏｎＰａｙ"]],
+  ["光熱費",["東京ガス","電気"]],
+  ["住居・生活",["ポニークリーニング","大手門タワー","ワコーグラス","ＴＩＰ補修","ＴＩＰ通常"]],
+  ["旅行・レジャー",["楽天トラベル","ちゅらとく","チャンピオンシップ","イオンシネマ","まるしん","花園セイ","よこすか","みなべ","おらぶの温泉","カルビー","千葉県","イープラス","金城館","アソビュー","ジ　アウトレット","ＦＯＴＯシネマズ"]],
+  ["通販・ネット",["ＵＤＥＭＹ","UDEMYJP","アップルストア","ヨドバシカメラ"]],
+  ["振替・手数料",["口座振替","分割払い","ペイフレックス手数料","一括払いから","元本分ご請求","一括払いへの変更","残元本一括請求","お支払いありがとう"]],
+  ["年会費・ポイント",["キャッシュバック","ポイント一括","ポイント（カードクレジ","ポイント充当","基本カード年会費"]],
+  ["税金",["申告所得税"]],
+];
+
+let allData = [];
+let customCats = {};
+let currentTab = 'list';
+let listSort = {col:'date',asc:false};
+let currentPage = 1;
+let editingStore = '';
+
+function init(){
+  allData = JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+  customCats = JSON.parse(localStorage.getItem(CATS_KEY)||'{}');
+  setupEventListeners();
+  if(allData.length) {
+    document.getElementById('uploadSection').style.display='none';
+    refresh();
+  }
+  updateCount();
+}
+
+function setupEventListeners(){
+  const inputs = [document.getElementById('csvInput'),document.getElementById('csvInput2')];
+  inputs.forEach(el=>el.addEventListener('change',e=>handleFiles(e.target.files)));
+
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag')});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');handleFiles(e.dataTransfer.files)});
+
+  ['filterFrom','filterTo','filterUser','filterCat','filterSearch',
+   'catFilterFrom','catFilterTo','catFilterUser',
+   'storeFilterFrom','storeFilterTo','storeFilterUser','storeFilterCat','storeSearch',
+   'monthlyFilterUser','monthlyFilterCat'
+  ].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.addEventListener('input',()=>{currentPage=1;renderCurrentTab()});
+  });
+}
+
+function categorize(store){
+  if(customCats[store]) return customCats[store];
+  for(const [cat,kws] of CAT_RULES){
+    for(const kw of kws){
+      if(store.includes(kw)) return cat;
+    }
+  }
+  return 'その他';
+}
+
+async function handleFiles(files){
+  let added=0;
+  const existingKeys = new Set(allData.map(r=>`${r.date}|${r.procDate}|${r.store}|${r.user}|${r.amount}`));
+
+  for(const file of files){
+    const buf = await file.arrayBuffer();
+    let text;
+    try{
+      const decoder = new TextDecoder('shift_jis');
+      text = decoder.decode(buf);
+      if(!text.includes('ご利用日')&&!text.includes('利用日')){
+        text = new TextDecoder('utf-8').decode(buf);
+      }
+    }catch{
+      text = new TextDecoder('utf-8').decode(buf);
+    }
+    const lines = text.split(/\r?\n/).filter(l=>l.trim());
+    for(let i=1;i<lines.length;i++){
+      const cols = parseCSVLine(lines[i]);
+      if(cols.length<6) continue;
+      const date = cols[0].trim();
+      const procDate = cols[1].trim();
+      const store = cols[2].trim();
+      const user = cols[3].trim();
+      const amountStr = cols[5].trim().replace(/"/g,'').replace(/,/g,'');
+      if(!date||!amountStr) continue;
+      const amount = parseInt(amountStr,10);
+      if(isNaN(amount)) continue;
+      const key = `${date}|${procDate}|${store}|${user}|${amount}`;
+      if(existingKeys.has(key)) continue;
+      existingKeys.add(key);
+      allData.push({date,procDate,store,user,amount,category:categorize(store)});
+      added++;
+    }
+  }
+
+  allData.sort((a,b)=>b.date.localeCompare(a.date));
+  save();
+  document.getElementById('uploadSection').style.display='none';
+  refresh();
+  toast(`${added}件追加しました（合計${allData.length}件）`);
+}
+
+function parseCSVLine(line){
+  const result=[];let cur='';let inQuote=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(inQuote){
+      if(c==='"'&&line[i+1]==='"'){cur+='"';i++}
+      else if(c==='"')inQuote=false;
+      else cur+=c;
+    }else{
+      if(c==='"')inQuote=true;
+      else if(c===','){result.push(cur);cur=''}
+      else cur+=c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function save(){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(allData));
+  localStorage.setItem(CATS_KEY,JSON.stringify(customCats));
+  updateCount();
+}
+
+function updateCount(){
+  document.getElementById('dataCount').textContent = allData.length?`${allData.length}件のデータ`:'';
+}
+
+function refresh(){
+  populateFilters();
+  renderCurrentTab();
+}
+
+function populateFilters(){
+  const users = [...new Set(allData.map(r=>r.user))].sort();
+  const cats = [...new Set(allData.map(r=>r.category))].sort();
+
+  ['filterUser','catFilterUser','storeFilterUser','monthlyFilterUser'].forEach(id=>{
+    const sel=document.getElementById(id);
+    const val=sel.value;
+    sel.innerHTML='<option value="">全利用者</option>'+users.map(u=>`<option value="${u}">${u}</option>`).join('');
+    sel.value=val;
+  });
+  ['filterCat','storeFilterCat','monthlyFilterCat'].forEach(id=>{
+    const sel=document.getElementById(id);
+    const val=sel.value;
+    sel.innerHTML='<option value="">全カテゴリ</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    sel.value=val;
+  });
+}
+
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  ['listView','categoryView','storeView','monthlyView'].forEach(v=>document.getElementById(v).style.display='none');
+  document.getElementById(tab+'View').style.display='';
+  renderCurrentTab();
+}
+
+function renderCurrentTab(){
+  renderStats();
+  if(currentTab==='list') renderList();
+  else if(currentTab==='category') renderCategory();
+  else if(currentTab==='store') renderStore();
+  else if(currentTab==='monthly') renderMonthly();
+}
+
+function getFilteredData(prefix='filter'){
+  let data=[...allData];
+  const from=document.getElementById(prefix+'From')?.value;
+  const to=document.getElementById(prefix+'To')?.value;
+  const user=document.getElementById(prefix+'User')?.value;
+  const cat=document.getElementById(prefix+'Cat')?.value;
+  const search=document.getElementById(prefix+'Search')?.value?.toLowerCase();
+
+  if(from){const ym=from.replace('-','/');data=data.filter(r=>r.date.slice(0,7).replace('-','/')>=ym)}
+  if(to){const ym=to.replace('-','/');data=data.filter(r=>r.date.slice(0,7).replace('-','/')<=ym)}
+  if(user) data=data.filter(r=>r.user===user);
+  if(cat) data=data.filter(r=>r.category===cat);
+  if(search) data=data.filter(r=>r.store.toLowerCase().includes(search));
+  return data;
+}
+
+function renderStats(){
+  const data = getFilteredData(currentTab==='list'?'filter':currentTab==='category'?'catFilter':currentTab==='store'?'storeFilter':'monthlyFilter');
+  const positive = data.filter(r=>r.amount>0);
+  const total = positive.reduce((s,r)=>s+r.amount,0);
+  const months = new Set(data.map(r=>r.date.slice(0,7)));
+  const avg = months.size? Math.round(total/months.size):0;
+
+  document.getElementById('statsBar').innerHTML=`
+    <div class="stat"><div class="stat-label">件数</div><div class="stat-value">${data.length.toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">支出合計（正の値）</div><div class="stat-value">¥${total.toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">月平均</div><div class="stat-value">¥${avg.toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">対象月数</div><div class="stat-value">${months.size}ヶ月</div></div>
+  `;
+}
+
+function renderList(){
+  const data=getFilteredData('filter');
+  const cols=[
+    {key:'date',label:'利用日'},
+    {key:'store',label:'利用内容'},
+    {key:'user',label:'利用者'},
+    {key:'amount',label:'金額'},
+    {key:'category',label:'カテゴリ'},
+  ];
+  const hdr=document.getElementById('listHeader');
+  hdr.innerHTML=cols.map(c=>{
+    const icon=listSort.col===c.key?(listSort.asc?'▲':'▼'):'';
+    return `<th onclick="sortList('${c.key}')" style="${c.key==='amount'?'text-align:right':''}">${c.label}<span class="sort-icon">${icon}</span></th>`;
+  }).join('')+'<th style="width:40px"></th>';
+
+  const sorted=[...data].sort((a,b)=>{
+    let va=a[listSort.col],vb=b[listSort.col];
+    if(listSort.col==='amount') return listSort.asc?va-vb:vb-va;
+    return listSort.asc?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
+  });
+
+  const totalPages=Math.max(1,Math.ceil(sorted.length/PAGE_SIZE));
+  if(currentPage>totalPages)currentPage=totalPages;
+  const start=(currentPage-1)*PAGE_SIZE;
+  const page=sorted.slice(start,start+PAGE_SIZE);
+
+  const body=document.getElementById('listBody');
+  if(!page.length){
+    body.innerHTML='<tr><td colspan="6" class="empty"><div class="empty-icon">📋</div>データがありません</td></tr>';
+  } else {
+    body.innerHTML=page.map(r=>`<tr>
+      <td>${r.date}</td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis" title="${esc(r.store)}">${esc(r.store)}</td>
+      <td>${esc(r.user)}</td>
+      <td class="amount${r.amount<0?' neg':''}">${r.amount.toLocaleString()}</td>
+      <td><span class="cat-badge">${esc(r.category)}</span></td>
+      <td><button class="btn btn-sm" onclick="openEdit('${esc(r.store)}')">✏️</button></td>
+    </tr>`).join('');
+  }
+
+  document.getElementById('pagination').innerHTML = totalPages>1?`
+    <button class="btn btn-sm" onclick="changePage(-1)" ${currentPage<=1?'disabled':''}>← 前</button>
+    <span class="page-info">${currentPage} / ${totalPages}</span>
+    <button class="btn btn-sm" onclick="changePage(1)" ${currentPage>=totalPages?'disabled':''}>次 →</button>
+  `:'';
+}
+
+function renderCategory(){
+  const data=getFilteredData('catFilter').filter(r=>r.amount>0);
+  const map={};
+  data.forEach(r=>{
+    if(!map[r.category]) map[r.category]={count:0,total:0};
+    map[r.category].count++;
+    map[r.category].total+=r.amount;
+  });
+  const entries=Object.entries(map).sort((a,b)=>b[1].total-a[1].total);
+  const grandTotal=entries.reduce((s,e)=>s+e[1].total,0);
+
+  document.getElementById('catBody').innerHTML=entries.map(([cat,v])=>`<tr>
+    <td><span class="cat-badge">${esc(cat)}</span></td>
+    <td>${v.count}</td>
+    <td class="amount">¥${v.total.toLocaleString()}</td>
+    <td class="amount">¥${Math.round(v.total/v.count).toLocaleString()}</td>
+    <td class="amount">${grandTotal?(v.total/grandTotal*100).toFixed(1):'0'}%</td>
+  </tr>`).join('')+`<tr class="summary-row">
+    <td>合計</td><td>${data.length}</td>
+    <td class="amount">¥${grandTotal.toLocaleString()}</td><td></td><td class="amount">100%</td>
+  </tr>`;
+}
+
+function renderStore(){
+  const data=getFilteredData('storeFilter').filter(r=>r.amount>0);
+  const search=document.getElementById('storeSearch')?.value?.toLowerCase()||'';
+  const map={};
+  data.forEach(r=>{
+    if(search && !r.store.toLowerCase().includes(search)) return;
+    const key=r.store;
+    if(!map[key]) map[key]={store:r.store,category:r.category,count:0,total:0};
+    map[key].count++;
+    map[key].total+=r.amount;
+  });
+  const entries=Object.values(map).sort((a,b)=>b.total-a.total);
+
+  document.getElementById('storeBody').innerHTML = entries.length?
+    entries.map(v=>`<tr>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis" title="${esc(v.store)}">${esc(v.store)}</td>
+      <td><span class="cat-badge">${esc(v.category)}</span></td>
+      <td>${v.count}</td>
+      <td class="amount">¥${v.total.toLocaleString()}</td>
+      <td class="amount">¥${Math.round(v.total/v.count).toLocaleString()}</td>
+    </tr>`).join(''):
+    '<tr><td colspan="5" class="empty">該当なし</td></tr>';
+}
+
+function renderMonthly(){
+  const user=document.getElementById('monthlyFilterUser')?.value||'';
+  const cat=document.getElementById('monthlyFilterCat')?.value||'';
+  let data=[...allData];
+  if(user) data=data.filter(r=>r.user===user);
+  if(cat) data=data.filter(r=>r.category===cat);
+  data=data.filter(r=>r.amount>0);
+
+  const map={};
+  data.forEach(r=>{
+    const ym=r.date.slice(0,7);
+    if(!map[ym]) map[ym]={count:0,total:0};
+    map[ym].count++;
+    map[ym].total+=r.amount;
+  });
+  const entries=Object.entries(map).sort((a,b)=>b[0].localeCompare(a[0]));
+  const grandTotal=entries.reduce((s,e)=>s+e[1].total,0);
+
+  document.getElementById('monthlyBody').innerHTML = entries.map(([ym,v])=>`<tr>
+    <td>${ym}</td>
+    <td>${v.count}</td>
+    <td class="amount">¥${v.total.toLocaleString()}</td>
+    <td class="amount">¥${Math.round(v.total/v.count).toLocaleString()}</td>
+  </tr>`).join('')+`<tr class="summary-row">
+    <td>合計 (${entries.length}ヶ月)</td><td>${data.length}</td>
+    <td class="amount">¥${grandTotal.toLocaleString()}</td>
+    <td class="amount">¥${entries.length?Math.round(grandTotal/entries.length).toLocaleString():'0'}</td>
+  </tr>`;
+}
+
+function sortList(col){
+  if(listSort.col===col) listSort.asc=!listSort.asc;
+  else{listSort.col=col;listSort.asc=col==='date'?false:true}
+  renderList();
+}
+
+function changePage(d){currentPage+=d;renderList()}
+
+function openEdit(store){
+  editingStore=store;
+  document.getElementById('editStoreName').textContent=store;
+  const cats=[...new Set(allData.map(r=>r.category))].sort();
+  const sel=document.getElementById('editCatSelect');
+  sel.innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const current=allData.find(r=>r.store===store)?.category||'その他';
+  sel.value=current;
+  document.getElementById('editCatCustom').value='';
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeModal(){document.getElementById('editModal').classList.remove('open')}
+
+function saveCategory(){
+  const custom=document.getElementById('editCatCustom').value.trim();
+  const selected=document.getElementById('editCatSelect').value;
+  const newCat=custom||selected;
+  customCats[editingStore]=newCat;
+  allData.forEach(r=>{if(r.store===editingStore)r.category=newCat});
+  save();
+  closeModal();
+  refresh();
+  toast(`「${editingStore}」→「${newCat}」に変更`);
+}
+
+function exportCSV(){
+  const bom='﻿';
+  const header='利用日,処理日,利用内容,利用者,金額,カテゴリ\n';
+  const rows=allData.map(r=>`${r.date},${r.procDate},"${r.store}",${r.user},${r.amount},${r.category}`).join('\n');
+  const blob=new Blob([bom+header+rows],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`カード明細_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function confirmClear(){
+  if(confirm('全データを削除しますか？この操作は取り消せません。')){
+    allData=[];customCats={};
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(CATS_KEY);
+    document.getElementById('uploadSection').style.display='';
+    refresh();
+    toast('全データを削除しました');
+  }
+}
+
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2500);
+}
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+
+init();
+</script>
+</body>
+</html>
